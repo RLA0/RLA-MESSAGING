@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>RLA - The Community!</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background-color: #2f3136;
+      color: #fff;
+    }
+    .login-screen, .app-screen, .admin-panel {
+      display: none;
+    }
+    .active {
+      display: block;
+    }
+    .container {
+      display: flex;
+      height: 100vh;
+    }
+    .sidebar {
+      width: 200px;
+      background-color: #202225;
+      padding: 10px;
+      overflow-y: auto;
+    }
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    .topbar {
+      background-color: #36393f;
+      padding: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .messages {
+      flex: 1;
+      padding: 10px;
+      overflow-y: auto;
+    }
+    .input-area {
+      padding: 10px;
+      background-color: #40444b;
+      display: flex;
+      gap: 5px;
+    }
+    .input-area input, .input-area button {
+      padding: 5px;
+      border: none;
+    }
+    .input-area input {
+      flex: 1;
+    }
+    .message, .announcement {
+      margin-bottom: 10px;
+      background-color: #7289da;
+      padding: 8px;
+      border-radius: 5px;
+    }
+    img.uploaded {
+      max-width: 100px;
+      display: block;
+      margin-top: 5px;
+    }
+    .badge {
+      background: #43b581;
+      padding: 2px 5px;
+      border-radius: 4px;
+      font-size: 12px;
+      margin-left: 5px;
+    }
+    button {
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+<div class="login-screen active">
+  <h2>RLA Messaging Login / Register</h2>
+  <input type="text" id="username" placeholder="Username"/><br/>
+  <input type="password" id="password" placeholder="Password"/><br/>
+  <button onclick="register()">Register</button>
+  <button onclick="login()">Login</button>
+</div>
+
+<div class="app-screen">
+  <div class="container">
+    <div class="sidebar">
+      <h3>Users</h3>
+      <div id="userList"></div>
+      <button id="adminPanelBtn" onclick="showAdminPanel()" style="display:none;">Admin Panel</button>
+    </div>
+    <div class="main">
+      <div class="topbar">
+        <span id="currentUser"></span>
+        <button onclick="logout()">Logout</button>
+      </div>
+      <div class="messages" id="messages"></div>
+      <div class="input-area">
+        <input type="text" id="chatInput" placeholder="Type a message...">
+        <input type="file" id="chatImage" />
+        <button onclick="sendMessage()">Send</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="admin-panel">
+  <h3>Admin Panel</h3>
+  <select id="userSelect"></select>
+  <button onclick="promoteUser('admin')">Make Admin</button>
+  <button onclick="promoteUser('verified')">Verify</button>
+  <h4>Make Announcement</h4>
+  <input type="text" id="announcementInput" placeholder="Your announcement"/>
+  <input type="file" id="announcementImage" />
+  <button onclick="makeAnnouncement()">Post</button>
+  <button onclick="hideAdminPanel()">Close</button>
+  <div id="announcements"></div>
+</div>
+
+<script>
+  let users = JSON.parse(localStorage.getItem("users") || "{}");
+  let messages = JSON.parse(localStorage.getItem("messages") || "[]");
+  let announcements = JSON.parse(localStorage.getItem("announcements") || "[]");
+  let currentUser = localStorage.getItem("currentUser");
+
+  function saveUsers() {
+    localStorage.setItem("users", JSON.stringify(users));
+  }
+
+  function saveMessages() {
+    localStorage.setItem("messages", JSON.stringify(messages));
+  }
+
+  function saveAnnouncements() {
+    localStorage.setItem("announcements", JSON.stringify(announcements));
+  }
+
+  function register() {
+    const u = document.getElementById("username").value;
+    const p = document.getElementById("password").value;
+    if (users[u]) return alert("User already exists!");
+    users[u] = { password: p, role: Object.keys(users).length === 0 ? "owner" : "user", verified: Object.keys(users).length === 0 };
+    saveUsers();
+    login(u, p);
+  }
+
+  function login(usernameInput, passwordInput) {
+    const u = usernameInput || document.getElementById("username").value;
+    const p = passwordInput || document.getElementById("password").value;
+    if (!users[u] || users[u].password !== p) return alert("Invalid login.");
+    currentUser = u;
+    localStorage.setItem("currentUser", u);
+    showApp();
+  }
+
+  function logout() {
+    localStorage.removeItem("currentUser");
+    location.reload();
+  }
+
+  function showApp() {
+    document.querySelector(".login-screen").classList.remove("active");
+    document.querySelector(".app-screen").classList.add("active");
+    document.getElementById("currentUser").innerHTML = `${currentUser} ${getBadges(users[currentUser])}`;
+    updateUserList();
+    updateMessages();
+    if (["admin", "owner"].includes(users[currentUser].role)) {
+      document.getElementById("adminPanelBtn").style.display = "block";
+    }
+  }
+
+  function getBadges(user) {
+    let badges = '';
+    if (user.role === "owner") badges += '<span class="badge">👑 Owner</span>';
+    if (user.role === "admin") badges += '<span class="badge">🔧 Admin</span>';
+    if (user.verified) badges += '<span class="badge">✅ Verified</span>';
+    return badges;
+  }
+
+  function updateUserList() {
+    const userList = document.getElementById("userList");
+    const userSelect = document.getElementById("userSelect");
+    userList.innerHTML = userSelect.innerHTML = "";
+    Object.keys(users).forEach(u => {
+      userList.innerHTML += `<div>${u} ${getBadges(users[u])}</div>`;
+      if (u !== currentUser) {
+        userSelect.innerHTML += `<option value="${u}">${u}</option>`;
+      }
+    });
+  }
+
+  function sendMessage() {
+    const text = document.getElementById("chatInput").value;
+    const imgFile = document.getElementById("chatImage").files[0];
+    if (!text && !imgFile) return;
+    const msg = { user: currentUser, text, time: Date.now() };
+    if (imgFile) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        msg.image = reader.result;
+        messages.push(msg);
+        saveMessages();
+        updateMessages();
+        clearInputs();
+      };
+      reader.readAsDataURL(imgFile);
+    } else {
+      messages.push(msg);
+      saveMessages();
+      updateMessages();
+      clearInputs();
+    }
+  }
+
+  function clearInputs() {
+    document.getElementById("chatInput").value = "";
+    document.getElementById("chatImage").value = "";
+  }
+
+  function updateMessages() {
+    const mbox = document.getElementById("messages");
+    mbox.innerHTML = "";
+    messages.forEach(m => {
+      mbox.innerHTML += `
+        <div class="message"><strong>${m.user}:</strong> ${m.text || ""}
+          ${m.image ? `<img class="uploaded" src="${m.image}" />` : ""}
+        </div>`;
+    });
+  }
+
+  function showAdminPanel() {
+    document.querySelector(".admin-panel").classList.add("active");
+    updateUserList();
+    updateAnnouncements();
+  }
+
+  function hideAdminPanel() {
+    document.querySelector(".admin-panel").classList.remove("active");
+  }
+
+  function promoteUser(role) {
+    const u = document.getElementById("userSelect").value;
+    if (!users[u]) return;
+    if (role === "admin") users[u].role = "admin";
+    if (role === "verified") users[u].verified = true;
+    saveUsers();
+   updateUserList(); }
+
+function makeAnnouncement() { const text = document.getElementById("announcementInput").value; const imgFile = document.getElementById("announcementImage").files[0]; if (!text && !imgFile) return; const announcement = { user: currentUser, text, time: Date.now() }; if (imgFile) { const reader = new FileReader(); reader.onload = () => { announcement.image = reader.result; announcements.push(announcement); saveAnnouncements(); updateAnnouncements(); }; reader.readAsDataURL(imgFile); } else { announcements.push(announcement); saveAnnouncements(); updateAnnouncements(); } }
+
+function updateAnnouncements() { const announcementsBox = document.getElementById("announcements"); announcementsBox.innerHTML = ""; announcements.forEach(a => { announcementsBox.innerHTML += <div class="announcement"><strong>${a.user}:</strong> ${a.text || ""} ${a.image ?<img class="uploaded" src="${a.image}" /> : ""} </div>; }); }
+
+window.onload = () => { if (currentUser) showApp(); }; </script>
+
+</body> </html> ```
